@@ -1,0 +1,7 @@
+{
+  "name": "Chalk - Break Your Limits",
+  "description": "A premium training companion for billiards and cuesports players, featuring AI-powered practice routines and performance tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
