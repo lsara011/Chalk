@@ -16,7 +16,7 @@ const Progress: React.FC = () => {
         <p className="text-xs text-muted-text dark:text-dark-text-muted">Tracking your road to mastery.</p>
       </div>
 
-      {/* Chart Section */}
+
       <div className="bg-white dark:bg-dark-surface p-6 rounded-[2rem] border border-soft-gray dark:border-dark-border shadow-sm mb-6 animate-zoom-in stagger-item-1">
         <div className="flex justify-between items-end mb-6">
           <div className="animate-slide-left stagger-item-2">
@@ -43,7 +43,7 @@ const Progress: React.FC = () => {
         </div>
       </div>
 
-      {/* Skill Breakdown */}
+
       <section className="space-y-4 mb-8">
         <h3 className="text-[10px] font-extrabold text-muted-text dark:text-dark-text-muted uppercase tracking-widest px-1 animate-fade-in stagger-item-2">Skill Proficiency</h3>
         <div className="bg-white dark:bg-dark-surface p-6 rounded-[2rem] border border-soft-gray dark:border-dark-border shadow-sm space-y-5 animate-slide-up stagger-item-2">
@@ -64,7 +64,7 @@ const Progress: React.FC = () => {
         </div>
       </section>
 
-      {/* Recent Sessions */}
+
       <section className="space-y-3 pb-4 animate-slide-up stagger-item-3">
         <h3 className="text-[10px] font-extrabold text-muted-text dark:text-dark-text-muted uppercase tracking-widest px-1">Practice History</h3>
         {[

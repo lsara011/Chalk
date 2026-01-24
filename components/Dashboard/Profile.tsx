@@ -50,7 +50,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
                     <span className={`font-black uppercase tracking-widest ${isAPA ? 'text-[9px] text-muted-text' : 'text-[11px] text-chalk-blue-dark'}`}>
                       {league.name}
                     </span>
-                    <span className={`font-bold text-muted-text dark:text-dark-text-muted ${isAPA ? 'text-[8px]' : 'text-[10px]'}`}>
+                    <span className={`font-bold text-muted-text dark:text-dark-text-muted ${isAPA ? 'text-[10px]' : 'text-[10px]'}`}>
                       {league.ratingLabel}
                     </span>
                   </div>
@@ -61,7 +61,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
                         key={pIdx}
                         className={`font-black text-deep-charcoal dark:text-white text-right leading-tight transition-all ${
                           !isAPA 
-                            ? 'text-3xl tracking-tighter' 
+                            ? 'text-2xl tracking-tighter' 
                             : ratingParts.length === 1 
                               ? 'text-2xl' 
                               : 'text-xs'
