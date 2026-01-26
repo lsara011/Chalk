@@ -12,7 +12,8 @@ export interface LeagueInfo {
 
 export interface User {
   email: string;
-  name: string;
+  firstName: string;
+  lastName: string;
   location?: string;
   leagues?: LeagueInfo[];
   skillLevel?: string;

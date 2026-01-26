@@ -5,6 +5,7 @@ import Progress from './Progress';
 import Profile from './Profile';
 import { User, AppView } from '../../types';
 
+
 interface DashboardProps {
   user: User;
   onNavigate: (view: AppView) => void;
@@ -24,7 +25,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate, onLogout, curre
     return (
       <div className="animate-fade-in overflow-hidden">
         <div className="mb-6 animate-slide-down">
-          <h2 className="text-xl font-bold text-deep-charcoal dark:text-white">Hi, {user.name}! 👋</h2>
+          <h2 className="text-xl font-bold text-deep-charcoal dark:text-white">Hi, {user.firstName}! 👋</h2>
           <p className="text-xs text-muted-text dark:text-dark-text-muted">Ready for today's session?</p>
         </div>
 
