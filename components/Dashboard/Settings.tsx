@@ -307,39 +307,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
                   </div>
                 </div>
 
-                <label className="block text-[10px] font-black text-muted-text dark:text-dark-text-muted uppercase tracking-wider mb-2 pt-2">Skill Level</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {['Novice', 'Intermediate', 'Pro'].map((level) => (
-                    <button
-                      key={level}
-                      onClick={() => onUpdateUser({ skillLevel: level })}
-                      className={`py-2 text-[11px] font-bold rounded-xl border transition-all ${
-                        skillLevel === level 
-                          ? 'bg-chalk-blue border-chalk-blue text-deep-charcoal' 
-                          : 'border-soft-gray dark:border-dark-border text-muted-text dark:text-dark-text-muted hover:border-chalk-blue'
-                      }`}
-                    >
-                      {level}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="p-5">
-                <label className="block text-[10px] font-black text-muted-text dark:text-dark-text-muted uppercase tracking-wider mb-2">Table Size</label>
-                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-                  {['7ft', '8ft', '9ft', 'Snooker'].map((size) => (
-                    <button
-                      key={size}
-                      className={`px-4 py-2 text-[11px] font-bold rounded-xl border whitespace-nowrap transition-all ${
-                        tableSize === size 
-                          ? 'bg-chalk-blue border-chalk-blue text-deep-charcoal' 
-                          : 'border-soft-gray dark:border-dark-border text-muted-text dark:text-dark-text-muted hover:border-chalk-blue'
-                      }`}
-                    >
-                      {size}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           </section>

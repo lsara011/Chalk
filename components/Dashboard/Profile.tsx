@@ -29,57 +29,6 @@ const Profile: React.FC<ProfileProps> = ({ user, onLogout }) => {
             {user.skillLevel || 'Novice'}
           </div>
         </div>
-        
-        {/* League Ratings Column */}
-        <div className="w-full space-y-3 px-4 animate-slide-up stagger-item-1">
-          {user.leagues && user.leagues.length > 0 ? (
-            user.leagues.map((league) => {
-              const isAPA = league.id === 'apa';
-              const ratingParts = league.rating.split(', ').filter(Boolean);
-              
-              return (
-                <div 
-                  key={league.id} 
-                  className={`w-full flex items-center justify-between px-6 py-4 rounded-[1.8rem] border transition-all shadow-sm ${
-                    isAPA 
-                    ? 'bg-gray-50 dark:bg-dark-surface border-soft-gray dark:border-dark-border opacity-90' 
-                    : 'bg-white dark:bg-dark-surface border-chalk-blue/30 dark:border-chalk-blue/20'
-                  }`}
-                >
-                  <div className="flex flex-col">
-                    <span className={`font-black uppercase tracking-widest ${isAPA ? 'text-[9px] text-muted-text' : 'text-[11px] text-chalk-blue-dark'}`}>
-                      {league.name}
-                    </span>
-                    <span className={`font-bold text-muted-text dark:text-dark-text-muted ${isAPA ? 'text-[10px]' : 'text-[10px]'}`}>
-                      {league.ratingLabel}
-                    </span>
-                  </div>
-                  
-                  <div className={`flex flex-col items-end ${isAPA ? 'gap-0.5' : ''}`}>
-                    {ratingParts.map((part, pIdx) => (
-                      <div 
-                        key={pIdx}
-                        className={`font-black text-deep-charcoal dark:text-white text-right leading-tight transition-all ${
-                          !isAPA 
-                            ? 'text-2xl tracking-tighter' 
-                            : ratingParts.length === 1 
-                              ? 'text-2xl' 
-                              : 'text-xs'
-                        }`}
-                      >
-                        {part}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-             <div className="w-full px-5 py-4 rounded-2xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-[0.15em] border border-indigo-100 dark:border-indigo-500/20 shadow-sm text-center">
-                Unattached Player
-              </div>
-          )}
-        </div>
       </div>
 
       {/* Profile Stats Grid */}

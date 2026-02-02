@@ -327,6 +327,13 @@ const Signup: React.FC<SignupProps> = ({
     }
 
     try {
+      console.log("RAW email:", JSON.stringify(email));
+      console.log("TRIMMED email:", JSON.stringify(cleanEmail));
+      console.log(
+        "email chars:",
+        [...cleanEmail].map((c) => c.charCodeAt(0))
+      );
+
       const { data: signUpData, error: signUpError } =
         await supabase.auth.signUp({
           email: cleanEmail,
@@ -341,9 +348,10 @@ const Signup: React.FC<SignupProps> = ({
         });
 
       if (signUpError) {
-        console.log("Supabase signUpError:", signUpError);
-        // signUpError.status is often set (422)
-        setAuthError(prettyAuthError(signUpError.message));
+        const msg = prettyAuthError(signUpError.message);
+        console.log("Supabase signup error:", signUpError);
+        console.log("Pretty message:", msg);
+        setAuthError(msg);
         return null;
       }
 
@@ -355,6 +363,46 @@ const Signup: React.FC<SignupProps> = ({
     } finally {
       setAuthLoading(false);
     }
+  };
+
+  const saveProfileToDb = async (userId: string) => {
+    const cleanFirst = firstName.trim();
+    const cleanLast = lastName.trim();
+
+    const { error: profileErr } = await supabase.from("user_profile").upsert({
+      user_id: userId,
+      first_name: cleanFirst,
+      last_name: cleanLast,
+    });
+    if (profileErr) throw profileErr;
+
+    const { error: locErr } = await supabase.from("locations").upsert({
+      user_id: userId,
+      country: isInternational ? selectedCountry : "United States",
+      state: selectedState,
+      city: selectedCity,
+      is_international: isInternational,
+    });
+    if (locErr) throw locErr;
+
+    const ratingsRow = {
+      user_id: userId,
+      apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
+      apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
+      fargo: leagueRatings.bca_fargo ? Number(leagueRatings.bca_fargo) : null,
+      usapl: leagueRatings.usapl_fargo
+        ? Number(leagueRatings.usapl_fargo)
+        : null,
+      vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
+      tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error: ratingsErr } = await supabase
+      .from("user_league_ratings")
+      .upsert(ratingsRow, { onConflict: "user_id" });
+
+    if (ratingsErr) throw ratingsErr;
   };
 
   const handleComplete = async () => {
@@ -386,6 +434,73 @@ const Signup: React.FC<SignupProps> = ({
         "❌ signupData was null (signup failed). authError:",
         authError
       );
+      return;
+    }
+
+    // ✅ SAVE TO DATABASE (put this right after signupData is confirmed)
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+
+    if (userErr || !user) {
+      setAuthError("Could not start a session. Please log in and try again.");
+      return;
+    }
+
+    const userId = user.id;
+
+    // 1) user_profile
+    const { error: profileErr } = await supabase.from("user_profile").upsert({
+      user_id: userId,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+    });
+    if (profileErr) {
+      console.error(profileErr);
+      setAuthError("Failed to save profile.");
+      return;
+    }
+
+    // 2) locations
+    const { error: locErr } = await supabase.from("locations").upsert({
+      user_id: userId,
+      country: isInternational ? selectedCountry : "United States",
+      state: selectedState,
+      city: selectedCity,
+      is_international: isInternational,
+    });
+    if (locErr) {
+      console.error(locErr);
+      setAuthError("Failed to save location.");
+      return;
+    }
+
+    // 3) user_league_ratings
+    const { error: ratingsErr } = await supabase
+      .from("user_league_ratings")
+      .upsert(
+        {
+          user_id: userId,
+          apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
+          apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
+          fargo: leagueRatings.bca_fargo
+            ? Number(leagueRatings.bca_fargo)
+            : null,
+          usapl: leagueRatings.usapl_fargo
+            ? Number(leagueRatings.usapl_fargo)
+            : null,
+          vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
+          tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      );
+
+    if (ratingsErr) {
+      console.error(ratingsErr);
+      setAuthError("Failed to save league ratings.");
       return;
     }
 

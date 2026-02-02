@@ -29,18 +29,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user, onNavigate, onLogout, curre
           <p className="text-xs text-muted-text dark:text-dark-text-muted">Ready for today's session?</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <div className="bg-white dark:bg-dark-surface p-4 rounded-2xl border border-soft-gray dark:border-dark-border shadow-sm animate-zoom-in stagger-item-1 hover:shadow-md hover:scale-[1.02] cursor-pointer">
-            <span className="material-symbols-outlined text-chalk-blue-dark text-2xl mb-1 animate-bounce-subtle">trending_up</span>
-            <div className="text-xl font-extrabold dark:text-white">0%</div>
-            <div className="text-[10px] text-muted-text dark:text-dark-text-muted font-bold uppercase tracking-wider">Pot Success</div>
-          </div>
-          <div className="bg-white dark:bg-dark-surface p-4 rounded-2xl border border-soft-gray dark:border-dark-border shadow-sm animate-zoom-in stagger-item-2 hover:shadow-md hover:scale-[1.02] cursor-pointer">
-            <span className="material-symbols-outlined text-orange-400 text-2xl mb-1">bolt</span>
-            <div className="text-xl font-extrabold dark:text-white">0</div>
-            <div className="text-[10px] text-muted-text dark:text-dark-text-muted font-bold uppercase tracking-wider">Day Streak</div>
-          </div>
-        </div>
 
         <section className="space-y-3 pb-4">
           <h3 className="text-[10px] font-extrabold text-muted-text dark:text-dark-text-muted uppercase tracking-widest px-1 animate-fade-in stagger-item-3">Training Tools</h3>
