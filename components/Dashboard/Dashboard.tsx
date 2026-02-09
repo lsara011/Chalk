@@ -1,6 +1,5 @@
 import React from "react";
 import Logo from "../Logo";
-import Progress from "./Progress";
 import { User, AppView } from "../../types";
 
 interface DashboardProps {
@@ -17,9 +16,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   currentView,
 }) => {
   const renderContent = () => {
-    if (currentView === "progress") {
-      return <Progress />;
-    }
 
     return (
       <div className="animate-fade-in overflow-hidden">
@@ -113,10 +109,8 @@ const Dashboard: React.FC<DashboardProps> = ({
         {renderContent()}
       </main>
 
-      <nav className="bg-white dark:bg-dark-surface border-t border-soft-gray dark:border-dark-border px-10 py-4 flex justify-between items-center flex-shrink-0 animate-slide-up shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
+      <nav className="bg-dark-bg px-10 py-4 flex justify-end items-center flex-shrink-0 animate-slide-up shadow-[0_-4px_10px_rgba(0,0,0,0.02)]">
         {[
-          { id: "dashboard", icon: "home" },
-          { id: "progress", icon: "insights" },
           { id: "settings", icon: "tune" },
         ].map((item) => (
           <button

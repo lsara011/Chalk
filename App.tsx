@@ -7,7 +7,6 @@ import AICoach from './components/Dashboard/AICoach';
 import SpeedSession from './components/Dashboard/SpeedSession';
 import FormAnalysis from './components/Dashboard/FormAnalysis';
 import Settings from './components/Dashboard/Settings';
-import Progress from './components/Dashboard/Progress';
 import { AppView, User, ThemeMode, LeagueInfo } from './types';
 
 const App: React.FC = () => {
