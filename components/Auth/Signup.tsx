@@ -106,6 +106,7 @@ const Signup: React.FC<SignupProps> = ({
   const [cities, setCities] = useState<string[]>([]);
   const [selectedCity, setSelectedCity] = useState("");
   const [loadingLoc, setLoadingLoc] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
 
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [leagueRatings, setLeagueRatings] = useState<Record<string, string>>(
@@ -348,9 +349,16 @@ const Signup: React.FC<SignupProps> = ({
         });
 
       if (signUpError) {
+        const raw = signUpError.message.toLowerCase();
+
+        const exists =
+          raw.includes("user already registered") ||
+          raw.includes("already registered") ||
+          raw.includes("already exists");
+
+        setEmailExists(exists);
+
         const msg = prettyAuthError(signUpError.message);
-        console.log("Supabase signup error:", signUpError);
-        console.log("Pretty message:", msg);
         setAuthError(msg);
         return null;
       }
@@ -365,145 +373,93 @@ const Signup: React.FC<SignupProps> = ({
     }
   };
 
-  const saveProfileToDb = async (userId: string) => {
-    const cleanFirst = firstName.trim();
-    const cleanLast = lastName.trim();
+  const validateAllBeforePersist = (): boolean => {
+    const newErrors: Record<string, string> = {};
 
-    const { error: profileErr } = await supabase.from("user_profile").upsert({
-      user_id: userId,
-      first_name: cleanFirst,
-      last_name: cleanLast,
-    });
-    if (profileErr) throw profileErr;
+    // Step 1 requirements
+    if (!firstName.trim()) newErrors.firstName = "First name is required";
+    if (!lastName.trim()) newErrors.lastName = "Last name is required";
+    if (!email.trim()) newErrors.email = "Email is required";
 
-    const { error: locErr } = await supabase.from("locations").upsert({
-      user_id: userId,
-      country: isInternational ? selectedCountry : "United States",
-      state: selectedState,
-      city: selectedCity,
-      is_international: isInternational,
-    });
-    if (locErr) throw locErr;
+    const passwordIssues = validatePassword(password);
+    if (passwordIssues.length > 0) {
+      newErrors.password = `Password must contain ${passwordIssues.join(
+        ", "
+      )}.`;
+    }
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
 
-    const ratingsRow = {
-      user_id: userId,
-      apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
-      apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
-      fargo: leagueRatings.bca_fargo ? Number(leagueRatings.bca_fargo) : null,
-      usapl: leagueRatings.usapl_fargo
-        ? Number(leagueRatings.usapl_fargo)
-        : null,
-      vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
-      tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
-      updated_at: new Date().toISOString(),
-    };
+    if (isInternational) {
+      if (!selectedCountry) newErrors.country = "Country is required";
+    }
+    if (!selectedState) newErrors.location = "State/Province is required";
+    if (!selectedCity) newErrors.location = "City is required";
 
-    const { error: ratingsErr } = await supabase
-      .from("user_league_ratings")
-      .upsert(ratingsRow, { onConflict: "user_id" });
+    if (selectedLeagues.length > 0) {
+      const leaguesOk = validateLeagues();
+      if (!leaguesOk) return false; // validateLeagues already setErrors
+    }
 
-    if (ratingsErr) throw ratingsErr;
+    if (Object.keys(newErrors).length > 0) {
+      setErrors((prev) => ({ ...prev, ...newErrors }));
+      setAuthError("Please fix the highlighted fields.");
+      return false;
+    }
+
+    return true;
   };
 
   const handleComplete = async () => {
-    console.log("✅ handleComplete clicked", {
-      step,
-      email,
-      pwLen: password.length,
-      firstName,
-      lastName,
-      selectedLeagues,
-      selectedCity,
-      selectedState,
-      isInternational,
-      selectedCountry,
-    });
+    setAuthError("");
 
-    const leaguesOk = validateLeagues();
-    if (!leaguesOk) {
-      console.log("❌ validateLeagues failed", errors);
-      setAuthError("Please fix the league rating errors above.");
-      return;
-    }
+    // 0) Hard gate: validate everything before any network call
+    const ok = validateAllBeforePersist();
+    if (!ok) return;
 
-    const signupData = await signUpWithSupabase();
-    console.log("🔥 signupData AFTER signUpWithSupabase:", signupData);
+    // 1) Create auth user (or sign in if already exists)
+    const authResult = await signUpWithSupabase();
+    if (!authResult) return;
 
-    if (!signupData) {
-      console.log(
-        "❌ signupData was null (signup failed). authError:",
-        authError
-      );
-      return;
-    }
-
-    // ✅ SAVE TO DATABASE (put this right after signupData is confirmed)
-
+    // 2) Confirm session user is available
     const {
       data: { user },
       error: userErr,
     } = await supabase.auth.getUser();
 
     if (userErr || !user) {
+      console.error(userErr);
       setAuthError("Could not start a session. Please log in and try again.");
       return;
     }
 
-    const userId = user.id;
-
-    // 1) user_profile
-    const { error: profileErr } = await supabase.from("user_profile").upsert({
-      user_id: userId,
-      first_name: firstName.trim(),
-      last_name: lastName.trim(),
+    // 3) Only now: write to DB (your choice)
+    // If you kept RPC:
+    const { error: rpcErr } = await supabase.rpc("complete_signup", {
+      p_first_name: firstName.trim(),
+      p_last_name: lastName.trim(),
+      p_country: isInternational ? selectedCountry : "United States",
+      p_state: selectedState,
+      p_city: selectedCity,
+      p_is_international: isInternational,
+      p_apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
+      p_apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
+      p_fargo: leagueRatings.bca_fargo ? Number(leagueRatings.bca_fargo) : null,
+      p_usapl: leagueRatings.usapl_fargo
+        ? Number(leagueRatings.usapl_fargo)
+        : null,
+      p_vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
+      p_tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
     });
-    if (profileErr) {
-      console.error(profileErr);
-      setAuthError("Failed to save profile.");
+
+    if (rpcErr) {
+      console.error(rpcErr);
+      setAuthError("Could not save your profile. Please try again.");
       return;
     }
 
-    // 2) locations
-    const { error: locErr } = await supabase.from("locations").upsert({
-      user_id: userId,
-      country: isInternational ? selectedCountry : "United States",
-      state: selectedState,
-      city: selectedCity,
-      is_international: isInternational,
-    });
-    if (locErr) {
-      console.error(locErr);
-      setAuthError("Failed to save location.");
-      return;
-    }
-
-    // 3) user_league_ratings
-    const { error: ratingsErr } = await supabase
-      .from("user_league_ratings")
-      .upsert(
-        {
-          user_id: userId,
-          apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
-          apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
-          fargo: leagueRatings.bca_fargo
-            ? Number(leagueRatings.bca_fargo)
-            : null,
-          usapl: leagueRatings.usapl_fargo
-            ? Number(leagueRatings.usapl_fargo)
-            : null,
-          vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
-          tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "user_id" }
-      );
-
-    if (ratingsErr) {
-      console.error(ratingsErr);
-      setAuthError("Failed to save league ratings.");
-      return;
-    }
-
+    // 4) Only after DB succeeds: build payload and finish
     const leagues: LeagueInfo[] = selectedLeagues.map((id) => {
       const def = AVAILABLE_LEAGUES.find((l) => l.id === id)!;
 
@@ -529,18 +485,10 @@ const Signup: React.FC<SignupProps> = ({
       isInternational ? `, ${selectedCountry}` : ""
     }`;
 
-    // You no longer have `name` state, so build it from first/last name
     const fullName = `${firstName} ${lastName}`.trim();
 
-    console.log("✅ onSignupComplete payload", {
-      email,
-      name: fullName,
-      location: fullLocation,
-      leagues,
-    });
-
     onSignupComplete({
-      email,
+      email: email.trim(),
       name: fullName,
       location: fullLocation,
       leagues,
@@ -638,9 +586,14 @@ const Signup: React.FC<SignupProps> = ({
                 placeholder="Email address"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (emailExists) setEmailExists(false);
+                  if (authError) setAuthError("");
+                }}
                 required
               />
+
 
               <div className="space-y-3">
                 {/* Password */}
@@ -1033,6 +986,20 @@ const Signup: React.FC<SignupProps> = ({
                 Complete Profile
               </button>
             </div>
+            {emailExists && (
+                <div className="text-center bg-red-50 dark:bg-red-900/10">
+                  <p className="text-[11px] font-bold text-red-600 p-5">
+                    E-mail is already registered. Try signing in instead
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onSwitchToLogin}
+                    className="flex-[2] btn-primary  active:scale-95 transition-all shadow-chalk-blue/20"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
           </div>
         );
 
@@ -1069,7 +1036,7 @@ const Signup: React.FC<SignupProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               className="btn-secondary !py-2.5 hover:bg-gray-50 transition-colors"
@@ -1107,7 +1074,7 @@ const Signup: React.FC<SignupProps> = ({
               </svg>
               <span className="text-xs">Apple</span>
             </button>
-          </div>
+          </div> */}
 
           <footer className="mt-6 text-center">
             <p className="text-xs text-muted-text dark:text-dark-text-muted">
