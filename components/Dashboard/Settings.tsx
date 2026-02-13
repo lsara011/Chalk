@@ -57,10 +57,8 @@ const AVAILABLE_LEAGUES: LeagueDefinition[] = [
 ];
 
 const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onThemeChange, onBack, onLogout }) => {
-  const skillLevel = user.skillLevel || 'Intermediate';
-  const tableSize = '9ft';
 
-  // Geographic States
+
   const [isInternational, setIsInternational] = useState(false);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState('United States');
@@ -70,7 +68,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
   const [selectedCity, setSelectedCity] = useState('');
   const [loadingLoc, setLoadingLoc] = useState(false);
 
-  // League Management States
+
   const [isEditingLeagues, setIsEditingLeagues] = useState(false);
   const [selectedLeagueIds, setSelectedLeagueIds] = useState<string[]>([]);
   const [leagueRatings, setLeagueRatings] = useState<Record<string, string>>({});
@@ -109,7 +107,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
     }
   }, [user]);
 
-  // API: Fetch Countries
   useEffect(() => {
     const fetchCountries = async () => {
       try {
@@ -121,7 +118,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
     fetchCountries();
   }, []);
 
-  // API: Fetch States
   useEffect(() => {
     const fetchStates = async () => {
       if (!selectedCountry) return;
@@ -140,7 +136,7 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
     fetchStates();
   }, [selectedCountry]);
 
-  // API: Fetch Cities
+
   useEffect(() => {
     const fetchCities = async () => {
       if (!selectedState || !selectedCountry) return;
@@ -311,7 +307,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
             </div>
           </section>
 
-          {/* League & Ratings Management */}
           <section>
             <div className="flex justify-between items-center px-1 mb-3">
               <h3 className="text-[10px] font-extrabold text-muted-text dark:text-dark-text-muted uppercase tracking-widest">Leagues & Ratings</h3>
@@ -389,7 +384,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
             </div>
           </section>
 
-          {/* Appearance */}
           <section>
             <h3 className="text-[10px] font-extrabold text-muted-text dark:text-dark-text-muted uppercase tracking-widest px-1 mb-3">Appearance</h3>
             <div className="bg-white dark:bg-dark-surface rounded-[2rem] border border-soft-gray dark:border-dark-border overflow-hidden shadow-sm">
@@ -415,7 +409,6 @@ const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onTh
             </div>
           </section>
 
-          {/* Account Management */}
           <section className="pt-4">
             <button 
               onClick={onLogout}

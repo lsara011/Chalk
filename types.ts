@@ -32,6 +32,13 @@ export interface Drill {
   imageUrl?: string;
 }
 
+interface LoginProps {
+  onLogin: (email: string) => void;
+  onSwitchToSignup: () => void;
+  onForgotPassword: () => void;
+}
+
+
 export interface SpeedDrill {
   id: string;
   name: string;

@@ -7,7 +7,7 @@ interface LoginProps {
   onSwitchToSignup: () => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPassword }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
@@ -43,7 +43,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup }) => {
         return;
       }
 
-      // ✅ logged in (data.session + data.user are available)
       onLogin(cleanEmail);
     } catch (err) {
       console.error(err);
@@ -58,7 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup }) => {
       {/* ✅ Center */}
       <div className="flex-1 w-full flex flex-col justify-center items-center">
         <div className="mt-4 mb-6 flex flex-col items-center animate-slide-down">
-          <div className="relative mb-4 hover:rotate-6 transition-transform">
+          <div className="relative mb-1 hover:rotate-6 transition-transform">
             <Logo size="sm" />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-deep-charcoal dark:text-white">
@@ -96,6 +95,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup }) => {
           <div className="flex justify-end pr-1">
             <button
               type="button"
+              onClick={onForgotPassword}
               className="text-[11px] font-semibold text-muted-text dark:text-dark-text-muted hover:text-deep-charcoal dark:hover:text-white transition-colors"
             >
               Forgot Password?

@@ -1,37 +1,38 @@
-
-import React, { useState, useEffect } from 'react';
-import Login from './components/Auth/Login';
-import Signup from './components/Auth/Signup';
-import Dashboard from './components/Dashboard/Dashboard';
-import AICoach from './components/Dashboard/AICoach';
-import SpeedSession from './components/Dashboard/SpeedSession';
-import FormAnalysis from './components/Dashboard/FormAnalysis';
-import Settings from './components/Dashboard/Settings';
-import { AppView, User, ThemeMode, LeagueInfo } from './types';
+import React, { useState, useEffect } from "react";
+import Login from "./components/Auth/Login";
+import Signup from "./components/Auth/Signup";
+import Dashboard from "./components/Dashboard/Dashboard";
+import AICoach from "./components/Dashboard/AICoach";
+import SpeedSession from "./components/Dashboard/SpeedSession";
+import FormAnalysis from "./components/Dashboard/FormAnalysis";
+import Settings from "./components/Dashboard/Settings";
+import ResetPassword from "./components/Dashboard/ResetPassword";
+import { AppView, User, ThemeMode, LeagueInfo } from "./types";
+import { supabase } from "./services/supabase";
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView>('login');
+  const [view, setView] = useState<AppView>("login");
   const [user, setUser] = useState<User | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('theme-mode') as ThemeMode) || 'auto';
+    return (localStorage.getItem("theme-mode") as ThemeMode) || "auto";
   });
 
   useEffect(() => {
     const applyTheme = () => {
       let isDark = false;
-      if (themeMode === 'dark') {
+      if (themeMode === "dark") {
         isDark = true;
-      } else if (themeMode === 'auto') {
+      } else if (themeMode === "auto") {
         const hour = new Date().getHours();
         isDark = hour >= 18 || hour < 6;
       }
-      
+
       if (isDark) {
-        document.documentElement.classList.add('dark');
+        document.documentElement.classList.add("dark");
       } else {
-        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.remove("dark");
       }
-      localStorage.setItem('theme-mode', themeMode);
+      localStorage.setItem("theme-mode", themeMode);
     };
 
     applyTheme();
@@ -39,23 +40,115 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [themeMode]);
 
-  const handleLogin = (email: string) => {
-    setUser({ 
-      email, 
-      name: email.split('@')[0], 
-      location: 'Chicago, Illinois',
-      skillLevel: 'Intermediate',
-      leagues: [
-        { id: 'bca', name: 'BCA', ratingLabel: 'FargoRate', rating: '525' },
-        { id: 'apa', name: 'APA', ratingLabel: 'SL', rating: '8-Ball: 5, 9-Ball: 4' }
-      ]
+  const hydrateUserFromSession = async () => {
+  const {
+    data: { user: authUser },
+    error: authErr,
+  } = await supabase.auth.getUser();
+
+  if (authErr || !authUser) throw authErr ?? new Error("No auth user");
+
+  // 1) Name from user_profile
+  const { data: profile, error: profileErr } = await supabase
+    .from("user_profile")
+    .select("first_name, last_name")
+    .eq("user_id", authUser.id)
+    .single();
+
+  if (profileErr) throw profileErr;
+
+  // 2) Location from locations (may not exist yet → maybeSingle)
+  const { data: loc, error: locErr } = await supabase
+    .from("locations")
+    .select("city, state, country, is_international")
+    .eq("user_id", authUser.id)
+    .maybeSingle();
+
+  if (locErr) throw locErr;
+
+  const locationString = loc
+    ? `${loc.city}, ${loc.state}${loc.is_international ? `, ${loc.country}` : ""}`
+    : "";
+
+  // 3) Ratings from user_league_ratings (may not exist yet → maybeSingle)
+  const { data: ratings, error: ratingsErr } = await supabase
+    .from("user_league_ratings")
+    .select("apa_8ball_sl, apa_9ball_sl, fargo, vnea, usapl, tap")
+    .eq("user_id", authUser.id)
+    .maybeSingle();
+
+  if (ratingsErr) throw ratingsErr;
+
+  // Build leagues array
+  const leagues: LeagueInfo[] = [];
+
+  if (ratings?.apa_8ball_sl != null || ratings?.apa_9ball_sl != null) {
+    leagues.push({
+      id: "apa",
+      name: "APA",
+      ratingLabel: "SL",
+      rating: `8-Ball: ${ratings?.apa_8ball_sl ?? "-"}, 9-Ball: ${ratings?.apa_9ball_sl ?? "-"}`,
     });
-    setView('dashboard');
+  }
+
+  if (ratings?.fargo != null) {
+    leagues.push({
+      id: "bca",
+      name: "BCA",
+      ratingLabel: "FargoRate",
+      rating: String(ratings.fargo),
+    });
+  }
+
+  if (ratings?.usapl != null) {
+    leagues.push({ id: "usapl", name: "USAPL", ratingLabel: "FargoRate", rating: String(ratings.usapl) });
+  }
+
+  if (ratings?.vnea != null) {
+    leagues.push({ id: "vnea", name: "VNEA", ratingLabel: "Skill Level", rating: String(ratings.vnea) });
+  }
+
+  if (ratings?.tap != null) {
+    leagues.push({ id: "tap", name: "TAP", ratingLabel: "Rating", rating: String(ratings.tap) });
+  }
+
+  setUser({
+    email: authUser.email ?? "",
+    firstName: profile.first_name ?? "",
+    lastName: profile.last_name ?? "",
+    location: locationString,
+    skillLevel: "Novice",
+    leagues,
+  });
+
+  setView("dashboard");
+};
+
+
+  const handleLogin = async (_email: string) => {
+    try {
+      await hydrateUserFromSession();
+    } catch (err) {
+      console.error("Login hydrate failed:", err);
+    }
   };
 
-  const handleSignupComplete = (userData: { email: string; name: string; location: string; leagues: LeagueInfo[] }) => {
-    setUser({ ...userData, skillLevel: 'Novice' });
-    setView('dashboard');
+  const handleSignupComplete = async () => {
+    try {
+      await hydrateUserFromSession();
+    } catch (err) {
+      console.error("Signup hydrate failed:", err);
+    }
+  };
+
+  const handlePasswordReset = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: "http://localhost:5173/reset-password", // change for prod
+    });
+
+    if (error) {
+      console.error(error);
+    }
   };
 
   const handleUpdateUser = (updates: Partial<User>) => {
@@ -66,45 +159,68 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setUser(null);
-    setView('login');
+    setView("login");
   };
 
   const renderView = () => {
     switch (view) {
-      case 'login':
-        return <Login onLogin={handleLogin} onSwitchToSignup={() => setView('signup')} />;
-      case 'signup':
-        return <Signup onSignupComplete={handleSignupComplete} onSwitchToLogin={() => setView('login')} />;
-      case 'dashboard':
-      case 'progress':
-      case 'profile':
+      case "login":
         return (
-          <Dashboard 
-            currentView={view} 
-            user={user!} 
-            onNavigate={(v) => setView(v)} 
-            onLogout={handleLogout} 
+          <Login
+            onLogin={handleLogin}
+            onSwitchToSignup={() => setView("signup")}
+            onForgotPassword={() => setView("reset-password")}
           />
         );
-      case 'ai-coach':
-        return <AICoach onBack={() => setView('dashboard')} />;
-      case 'speed-session':
-        return <SpeedSession onBack={() => setView('dashboard')} />;
-      case 'form-analysis':
-        return <FormAnalysis onBack={() => setView('dashboard')} />;
-      case 'settings':
+      case "signup":
         return (
-          <Settings 
+          <Signup
+            onSignupComplete={handleSignupComplete}
+            onSwitchToLogin={() => setView("login")}
+          />
+        );
+      case "reset-password":
+        return (
+          <ResetPassword
+            onBackToLogin={() => setView("login")}
+            onSubmit={handlePasswordReset}
+          />
+        );
+      case "dashboard":
+      case "progress":
+      case "profile":
+        return (
+          <Dashboard
+            currentView={view}
+            user={user!}
+            onNavigate={(v) => setView(v)}
+            onLogout={handleLogout}
+          />
+        );
+      case "ai-coach":
+        return <AICoach onBack={() => setView("dashboard")} />;
+      case "speed-session":
+        return <SpeedSession onBack={() => setView("dashboard")} />;
+      case "form-analysis":
+        return <FormAnalysis onBack={() => setView("dashboard")} />;
+      case "settings":
+        return (
+          <Settings
             user={user!}
             onUpdateUser={handleUpdateUser}
-            themeMode={themeMode} 
-            onThemeChange={setThemeMode} 
-            onBack={() => setView('dashboard')} 
+            themeMode={themeMode}
+            onThemeChange={setThemeMode}
+            onBack={() => setView("dashboard")}
             onLogout={handleLogout}
           />
         );
       default:
-        return <Login onLogin={handleLogin} onSwitchToSignup={() => setView('signup')} />;
+        return (
+          <Login
+            onLogin={handleLogin}
+            onSwitchToSignup={() => setView("signup")}
+          />
+        );
     }
   };
 
