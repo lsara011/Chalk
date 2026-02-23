@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { PracticeRoutine, Drill } from '../../types';
+import { generateRoutine } from '@/services/geminiService';
 import MarkdownText from '../MarkdownText';
 
 interface AICoachProps {
@@ -25,11 +26,6 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
       const result = await generateRoutine(focusArea);
       setRoutine(result);
       
-      // Start generating images for each drill asynchronously
-      result.drills.forEach((drill, index) => {
-        fetchImage(drill, index);
-      });
-      
     } catch (err) {
       setError("AI is currently chalking its cue. Please try again in a moment.");
     } finally {
@@ -37,14 +33,6 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
     }
   };
 
-  const fetchImage = async (drill: Drill, index: number) => {
-    try {
-      const imageUrl = await generateDrillImage(drill.name, drill.instructions);
-      setDrillImages(prev => ({ ...prev, [index]: imageUrl }));
-    } catch (e) {
-      console.error("Failed to generate image for drill", index, e);
-    }
-  };
 
   return (
     <div className="w-full h-full flex flex-col bg-off-white dark:bg-dark-bg overflow-hidden transition-colors animate-fade-in">

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { analyzeFormVideo } from '../../services/geminiService';
+import { analyzeFormVideo } from '@/services/geminiService';
 import MarkdownText from '../MarkdownText';
 
 interface FormAnalysisProps {
