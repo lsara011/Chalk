@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { generateRoutine, generateDrillImage } from '../../services/geminiService';
 import { PracticeRoutine, Drill } from '../../types';
 import MarkdownText from '../MarkdownText';
 
