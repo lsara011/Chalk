@@ -10,12 +10,21 @@ from .models import (
     GenerateRoutineRequest,
     PracticeRoutine,
 )
-from .gemini_client import analyze_form_video, generate_practice_routine, GeminiError
+from .gemini_client import (
+    analyze_form_video,
+    generate_practice_routine,
+    close_gemini_client,
+    GeminiError,
+)
 
 # Tune this: base64 is bigger than raw video bytes (~33% overhead)
 MAX_BASE64_CHARS = 30_000_000  # ~20–25MB-ish depending on encoding
 
 app = FastAPI(title="Chalk Backend", version="0.1.0")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_gemini_client()
 
 app.add_middleware(
     CORSMiddleware,

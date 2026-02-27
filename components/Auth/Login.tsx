@@ -5,11 +5,13 @@ import { supabase } from "@/services/supabase";
 interface LoginProps {
   onLogin: (email: string) => void;
   onSwitchToSignup: () => void;
+  onForgotPassword: () => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPassword }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
@@ -83,14 +85,26 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
             required
           />
 
-          <input
-            className="input-field !py-3 !px-4"
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="relative">
+            <input
+              className="input-field !py-3 !px-4 !pr-12"
+              placeholder="Password"
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-3 flex items-center text-muted-text dark:text-dark-text-muted hover:text-deep-charcoal dark:hover:text-white"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {showPassword ? "visibility_off" : "visibility"}
+              </span>
+            </button>
+          </div>
 
           <div className="flex justify-end pr-1">
             <button

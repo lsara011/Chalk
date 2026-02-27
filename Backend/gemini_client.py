@@ -1,5 +1,7 @@
+import asyncio
+import random
 import httpx
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from .settings import settings
 
 class GeminiError(RuntimeError):
@@ -19,6 +21,43 @@ Analyze the following specific areas:
 Use professional terminology. Format with clear markdown headers (###) and bullet points.
 """
 
+ROUTINE_PROMPT_TEMPLATE = """Create a professional billiards/pool practice routine focused on: {focus_area}.
+Return ONLY valid JSON with this shape:
+{{
+  "title": "string",
+  "description": "string",
+  "drills": [
+    {{
+      "name": "string",
+      "reps": "string",
+      "instructions": "string",
+      "youtubeSearchQuery": "string"
+    }},
+    {{ ... }},
+    {{ ... }}
+  ]
+}}
+Rules:
+- drills must be exactly 3 items
+- youtubeSearchQuery should be a precise YouTube search string (example: "dr dave pool {focus_area} drill")
+"""
+
+_TIMEOUT = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
+_LIMITS = httpx.Limits(max_keepalive_connections=20, max_connections=100)
+_CLIENT: httpx.AsyncClient | None = None
+
+def _get_client() -> httpx.AsyncClient:
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = httpx.AsyncClient(timeout=_TIMEOUT, limits=_LIMITS)
+    return _CLIENT
+
+async def close_gemini_client() -> None:
+    global _CLIENT
+    if _CLIENT is not None:
+        await _CLIENT.aclose()
+        _CLIENT = None
+
 def _extract_text(data: Dict[str, Any]) -> str:
     """
     Gemini responses commonly look like:
@@ -37,15 +76,28 @@ def _extract_text(data: Dict[str, Any]) -> str:
 
 async def _post_gemini(model: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     url = GEMINI_BASE.format(model=model) + f"?key={settings.GEMINI_API_KEY}"
+    client = _get_client()
+    max_attempts = 3
 
-    timeout = httpx.Timeout(connect=10.0, read=120.0, write=30.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        r = await client.post(url, json=payload)
+    for attempt in range(1, max_attempts + 1):
+        try:
+            r = await client.post(url, json=payload)
+        except httpx.HTTPError as e:
+            if attempt == max_attempts:
+                raise GeminiError("Gemini request failed due to a network error.") from e
+            await asyncio.sleep((0.3 * attempt) + random.uniform(0.0, 0.2))
+            continue
 
-    if r.status_code != 200:
-        raise GeminiError(f"Gemini API error ({r.status_code}): {r.text}")
+        if r.status_code == 200:
+            return r.json()
 
-    return r.json()
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts:
+            await asyncio.sleep((0.4 * attempt) + random.uniform(0.0, 0.2))
+            continue
+
+        raise GeminiError(f"Gemini API error ({r.status_code}).")
+
+    raise GeminiError("Gemini request failed after retries.")
 
 async def analyze_form_video(base64_video: str, mime_type: str) -> str:
     payload = {
@@ -69,26 +121,7 @@ async def generate_practice_routine(focus_area: str) -> str:
     Returns raw JSON text (we parse/validate it in the API route).
     We force JSON output using response_mime_type and a schema-like instruction.
     """
-    prompt = f"""Create a professional, high-performance billiards/pool practice routine focusing on: {focus_area}.
-Return ONLY valid JSON with this shape:
-{{
-  "title": "string",
-  "description": "string",
-  "drills": [
-    {{
-      "name": "string",
-      "reps": "string",
-      "instructions": "string",
-      "youtubeSearchQuery": "string"
-    }},
-    {{ ... }},
-    {{ ... }}
-  ]
-}}
-Rules:
-- drills must be exactly 3 items
-- youtubeSearchQuery should be a precise YouTube search string (example: "dr dave pool {focus_area} drill")
-"""
+    prompt = ROUTINE_PROMPT_TEMPLATE.format(focus_area=focus_area)
 
     payload = {
         "contents": [
@@ -98,7 +131,9 @@ Rules:
             }
         ],
         "generationConfig": {
-            "response_mime_type": "application/json"
+            "response_mime_type": "application/json",
+            "temperature": 0.4,
+            "max_output_tokens": 700,
         }
     }
 

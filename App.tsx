@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Login from "./components/Auth/Login";
 import Signup from "./components/Auth/Signup";
 import Dashboard from "./components/Dashboard/Dashboard";
@@ -11,11 +11,18 @@ import { AppView, User, ThemeMode, LeagueInfo } from "./types";
 import { supabase } from "./services/supabase";
 
 const App: React.FC = () => {
+  const IDLE_TIMEOUT_MINUTES = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES ?? 30);
+  const IDLE_TIMEOUT_MS =
+    Number.isFinite(IDLE_TIMEOUT_MINUTES) && IDLE_TIMEOUT_MINUTES > 0
+      ? IDLE_TIMEOUT_MINUTES * 60 * 1000
+      : 30 * 60 * 1000;
+
   const [view, setView] = useState<AppView>("login");
   const [user, setUser] = useState<User | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     return (localStorage.getItem("theme-mode") as ThemeMode) || "auto";
   });
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const applyTheme = () => {
@@ -41,89 +48,151 @@ const App: React.FC = () => {
   }, [themeMode]);
 
   const hydrateUserFromSession = async () => {
-  const {
-    data: { user: authUser },
-    error: authErr,
-  } = await supabase.auth.getUser();
+    const {
+      data: { user: authUser },
+      error: authErr,
+    } = await supabase.auth.getUser();
 
-  if (authErr || !authUser) throw authErr ?? new Error("No auth user");
+    if (authErr || !authUser) throw authErr ?? new Error("No auth user");
 
-  // 1) Name from user_profile
-  const { data: profile, error: profileErr } = await supabase
-    .from("user_profile")
-    .select("first_name, last_name")
-    .eq("user_id", authUser.id)
-    .single();
+    // 1) Name from user_profile
+    const { data: profile, error: profileErr } = await supabase
+      .from("user_profile")
+      .select("first_name, last_name")
+      .eq("user_id", authUser.id)
+      .single();
 
-  if (profileErr) throw profileErr;
+    if (profileErr) throw profileErr;
 
-  // 2) Location from locations (may not exist yet → maybeSingle)
-  const { data: loc, error: locErr } = await supabase
-    .from("locations")
-    .select("city, state, country, is_international")
-    .eq("user_id", authUser.id)
-    .maybeSingle();
+    // 2) Location from locations (may not exist yet -> maybeSingle)
+    const { data: loc, error: locErr } = await supabase
+      .from("locations")
+      .select("city, state, country, is_international")
+      .eq("user_id", authUser.id)
+      .maybeSingle();
 
-  if (locErr) throw locErr;
+    if (locErr) throw locErr;
 
-  const locationString = loc
-    ? `${loc.city}, ${loc.state}${loc.is_international ? `, ${loc.country}` : ""}`
-    : "";
+    const locationString = loc
+      ? `${loc.city}, ${loc.state}${loc.is_international ? `, ${loc.country}` : ""}`
+      : "";
 
-  // 3) Ratings from user_league_ratings (may not exist yet → maybeSingle)
-  const { data: ratings, error: ratingsErr } = await supabase
-    .from("user_league_ratings")
-    .select("apa_8ball_sl, apa_9ball_sl, fargo, vnea, usapl, tap")
-    .eq("user_id", authUser.id)
-    .maybeSingle();
+    // 3) Ratings from user_league_ratings (may not exist yet -> maybeSingle)
+    const { data: ratings, error: ratingsErr } = await supabase
+      .from("user_league_ratings")
+      .select("apa_8ball_sl, apa_9ball_sl, fargo, vnea, usapl, tap")
+      .eq("user_id", authUser.id)
+      .maybeSingle();
 
-  if (ratingsErr) throw ratingsErr;
+    if (ratingsErr) throw ratingsErr;
 
-  // Build leagues array
-  const leagues: LeagueInfo[] = [];
+    const leagues: LeagueInfo[] = [];
 
-  if (ratings?.apa_8ball_sl != null || ratings?.apa_9ball_sl != null) {
-    leagues.push({
-      id: "apa",
-      name: "APA",
-      ratingLabel: "SL",
-      rating: `8-Ball: ${ratings?.apa_8ball_sl ?? "-"}, 9-Ball: ${ratings?.apa_9ball_sl ?? "-"}`,
+    if (ratings?.apa_8ball_sl != null || ratings?.apa_9ball_sl != null) {
+      leagues.push({
+        id: "apa",
+        name: "APA",
+        ratingLabel: "SL",
+        rating: `8-Ball: ${ratings?.apa_8ball_sl ?? "-"}, 9-Ball: ${ratings?.apa_9ball_sl ?? "-"}`,
+      });
+    }
+
+    if (ratings?.fargo != null) {
+      leagues.push({
+        id: "bca",
+        name: "BCA",
+        ratingLabel: "FargoRate",
+        rating: String(ratings.fargo),
+      });
+    }
+
+    if (ratings?.usapl != null) {
+      leagues.push({
+        id: "usapl",
+        name: "USAPL",
+        ratingLabel: "FargoRate",
+        rating: String(ratings.usapl),
+      });
+    }
+
+    if (ratings?.vnea != null) {
+      leagues.push({
+        id: "vnea",
+        name: "VNEA",
+        ratingLabel: "Skill Level",
+        rating: String(ratings.vnea),
+      });
+    }
+
+    if (ratings?.tap != null) {
+      leagues.push({
+        id: "tap",
+        name: "TAP",
+        ratingLabel: "Rating",
+        rating: String(ratings.tap),
+      });
+    }
+
+    setUser({
+      email: authUser.email ?? "",
+      firstName: profile.first_name ?? "",
+      lastName: profile.last_name ?? "",
+      location: locationString,
+      skillLevel: "Novice",
+      leagues,
     });
-  }
 
-  if (ratings?.fargo != null) {
-    leagues.push({
-      id: "bca",
-      name: "BCA",
-      ratingLabel: "FargoRate",
-      rating: String(ratings.fargo),
+    setView("dashboard");
+  };
+
+  useEffect(() => {
+    let active = true;
+
+    const bootstrapSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!active) return;
+
+      if (session) {
+        try {
+          await hydrateUserFromSession();
+        } catch (err) {
+          console.error("Session hydrate failed:", err);
+          setUser(null);
+          setView("login");
+        }
+      } else {
+        setUser(null);
+        setView("login");
+      }
+    };
+
+    bootstrapSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session) {
+        try {
+          await hydrateUserFromSession();
+        } catch (err) {
+          console.error("Auth state hydrate failed:", err);
+          setUser(null);
+          setView("login");
+        }
+      } else {
+        setUser(null);
+        setView("login");
+      }
     });
-  }
 
-  if (ratings?.usapl != null) {
-    leagues.push({ id: "usapl", name: "USAPL", ratingLabel: "FargoRate", rating: String(ratings.usapl) });
-  }
-
-  if (ratings?.vnea != null) {
-    leagues.push({ id: "vnea", name: "VNEA", ratingLabel: "Skill Level", rating: String(ratings.vnea) });
-  }
-
-  if (ratings?.tap != null) {
-    leagues.push({ id: "tap", name: "TAP", ratingLabel: "Rating", rating: String(ratings.tap) });
-  }
-
-  setUser({
-    email: authUser.email ?? "",
-    firstName: profile.first_name ?? "",
-    lastName: profile.last_name ?? "",
-    location: locationString,
-    skillLevel: "Novice",
-    leagues,
-  });
-
-  setView("dashboard");
-};
-
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const handleLogin = async (_email: string) => {
     try {
@@ -157,10 +226,44 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setView("login");
   };
+
+  useEffect(() => {
+    if (!user) {
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+      return;
+    }
+
+    const resetIdleTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        supabase.auth.signOut().catch((err) => {
+          console.error("Idle timeout sign out failed:", err);
+          setUser(null);
+          setView("login");
+        });
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const events: Array<keyof WindowEventMap> = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, resetIdleTimer, { passive: true }));
+    resetIdleTimer();
+
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer));
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
+      }
+    };
+  }, [user, IDLE_TIMEOUT_MS]);
 
   const renderView = () => {
     switch (view) {
@@ -173,19 +276,9 @@ const App: React.FC = () => {
           />
         );
       case "signup":
-        return (
-          <Signup
-            onSignupComplete={handleSignupComplete}
-            onSwitchToLogin={() => setView("login")}
-          />
-        );
+        return <Signup onSignupComplete={handleSignupComplete} onSwitchToLogin={() => setView("login")} />;
       case "reset-password":
-        return (
-          <ResetPassword
-            onBackToLogin={() => setView("login")}
-            onSubmit={handlePasswordReset}
-          />
-        );
+        return <ResetPassword onBackToLogin={() => setView("login")} onSubmit={handlePasswordReset} />;
       case "dashboard":
       case "progress":
       case "profile":
@@ -215,12 +308,7 @@ const App: React.FC = () => {
           />
         );
       default:
-        return (
-          <Login
-            onLogin={handleLogin}
-            onSwitchToSignup={() => setView("signup")}
-          />
-        );
+        return <Login onLogin={handleLogin} onSwitchToSignup={() => setView("signup")} />;
     }
   };
 
