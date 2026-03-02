@@ -7,8 +7,10 @@ import SpeedSession from "./components/Dashboard/SpeedSession";
 import FormAnalysis from "./components/Dashboard/FormAnalysis";
 import Settings from "./components/Dashboard/Settings";
 import ResetPassword from "./components/Dashboard/ResetPassword";
-import { AppView, User, ThemeMode, LeagueInfo } from "./types";
+import { AppView, User, ThemeMode, LeagueInfo, UserProfile } from "./types";
 import { supabase } from "./services/supabase";
+
+const USER_CACHE_KEY = "chalk-user-cache-v1";
 
 const App: React.FC = () => {
   const IDLE_TIMEOUT_MINUTES = Number(import.meta.env.VITE_IDLE_TIMEOUT_MINUTES ?? 30);
@@ -19,10 +21,30 @@ const App: React.FC = () => {
 
   const [view, setView] = useState<AppView>("login");
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     return (localStorage.getItem("theme-mode") as ThemeMode) || "auto";
   });
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const loadCachedUser = (): User | null => {
+    try {
+      const raw = localStorage.getItem(USER_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as User;
+      if (!parsed?.email) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const getAuthUserFromSession = async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    return session?.user ?? null;
+  };
 
   useEffect(() => {
     const applyTheme = () => {
@@ -48,43 +70,52 @@ const App: React.FC = () => {
   }, [themeMode]);
 
   const hydrateUserFromSession = async () => {
-    const {
-      data: { user: authUser },
-      error: authErr,
-    } = await supabase.auth.getUser();
+    const authUser = await getAuthUserFromSession();
+    if (!authUser) throw new Error("No auth user in session");
 
-    if (authErr || !authUser) throw authErr ?? new Error("No auth user");
+    // Move user to app immediately after auth, preserving any existing cached values.
+    setUser((prev) => ({
+      email: authUser.email ?? prev?.email ?? "",
+      firstName: prev?.firstName ?? "",
+      lastName: prev?.lastName ?? "",
+      location: prev?.location ?? "",
+      skillLevel: prev?.skillLevel ?? "Novice",
+      leagues: prev?.leagues ?? [],
+    }));
+    setView("dashboard");
 
-    // 1) Name from user_profile
-    const { data: profile, error: profileErr } = await supabase
-      .from("user_profile")
-      .select("first_name, last_name")
-      .eq("user_id", authUser.id)
-      .single();
+    const [profileRes, locRes, ratingsRes] = await Promise.all([
+      supabase
+        .from("user_profile")
+        .select("first_name, last_name")
+        .eq("user_id", authUser.id)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("locations")
+        .select("city, state, country, is_international")
+        .eq("user_id", authUser.id)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("user_league_ratings")
+        .select("apa_8ball_sl, apa_9ball_sl, fargo, vnea, usapl, tap")
+        .eq("user_id", authUser.id)
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-    if (profileErr) throw profileErr;
+    if (profileRes.error) console.warn("Profile hydrate warning:", profileRes.error.message);
+    if (locRes.error) console.warn("Location hydrate warning:", locRes.error.message);
+    if (ratingsRes.error) console.warn("Ratings hydrate warning:", ratingsRes.error.message);
 
-    // 2) Location from locations (may not exist yet -> maybeSingle)
-    const { data: loc, error: locErr } = await supabase
-      .from("locations")
-      .select("city, state, country, is_international")
-      .eq("user_id", authUser.id)
-      .maybeSingle();
-
-    if (locErr) throw locErr;
+    const profile = profileRes.data;
+    const loc = locRes.data;
+    const ratings = ratingsRes.data;
 
     const locationString = loc
       ? `${loc.city}, ${loc.state}${loc.is_international ? `, ${loc.country}` : ""}`
       : "";
-
-    // 3) Ratings from user_league_ratings (may not exist yet -> maybeSingle)
-    const { data: ratings, error: ratingsErr } = await supabase
-      .from("user_league_ratings")
-      .select("apa_8ball_sl, apa_9ball_sl, fargo, vnea, usapl, tap")
-      .eq("user_id", authUser.id)
-      .maybeSingle();
-
-    if (ratingsErr) throw ratingsErr;
 
     const leagues: LeagueInfo[] = [];
 
@@ -96,53 +127,37 @@ const App: React.FC = () => {
         rating: `8-Ball: ${ratings?.apa_8ball_sl ?? "-"}, 9-Ball: ${ratings?.apa_9ball_sl ?? "-"}`,
       });
     }
-
     if (ratings?.fargo != null) {
-      leagues.push({
-        id: "bca",
-        name: "BCA",
-        ratingLabel: "FargoRate",
-        rating: String(ratings.fargo),
-      });
+      leagues.push({ id: "bca", name: "BCA", ratingLabel: "FargoRate", rating: String(ratings.fargo) });
     }
-
     if (ratings?.usapl != null) {
-      leagues.push({
-        id: "usapl",
-        name: "USAPL",
-        ratingLabel: "FargoRate",
-        rating: String(ratings.usapl),
-      });
+      leagues.push({ id: "usapl", name: "USAPL", ratingLabel: "FargoRate", rating: String(ratings.usapl) });
     }
-
     if (ratings?.vnea != null) {
-      leagues.push({
-        id: "vnea",
-        name: "VNEA",
-        ratingLabel: "Skill Level",
-        rating: String(ratings.vnea),
-      });
+      leagues.push({ id: "vnea", name: "VNEA", ratingLabel: "Skill Level", rating: String(ratings.vnea) });
     }
-
     if (ratings?.tap != null) {
-      leagues.push({
-        id: "tap",
-        name: "TAP",
-        ratingLabel: "Rating",
-        rating: String(ratings.tap),
-      });
+      leagues.push({ id: "tap", name: "TAP", ratingLabel: "Rating", rating: String(ratings.tap) });
     }
 
-    setUser({
-      email: authUser.email ?? "",
-      firstName: profile.first_name ?? "",
-      lastName: profile.last_name ?? "",
-      location: locationString,
-      skillLevel: "Novice",
-      leagues,
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        firstName: profile?.first_name ?? prev.firstName,
+        lastName: profile?.last_name ?? prev.lastName,
+        location: locationString || prev.location,
+        leagues: leagues.length ? leagues : prev.leagues,
+      };
     });
-
-    setView("dashboard");
+    setUserProfile(
+      profile
+        ? {
+            firstName: profile.first_name ?? "",
+            lastName: profile.last_name ?? "",
+          }
+        : null
+    );
   };
 
   useEffect(() => {
@@ -156,16 +171,29 @@ const App: React.FC = () => {
       if (!active) return;
 
       if (session) {
+        const cached = loadCachedUser();
+        if (cached) {
+          setUser(cached);
+          setView("dashboard");
+        }
+
         try {
           await hydrateUserFromSession();
         } catch (err) {
           console.error("Session hydrate failed:", err);
-          setUser(null);
-          setView("login");
+          const {
+            data: { session: currentSession },
+          } = await supabase.auth.getSession();
+          if (!currentSession) {
+            setUser(null);
+            setView("login");
+          }
         }
       } else {
         setUser(null);
+        setUserProfile(null);
         setView("login");
+        localStorage.removeItem(USER_CACHE_KEY);
       }
     };
 
@@ -173,18 +201,19 @@ const App: React.FC = () => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        try {
-          await hydrateUserFromSession();
-        } catch (err) {
-          console.error("Auth state hydrate failed:", err);
-          setUser(null);
-          setView("login");
-        }
+        // Keep auth callback non-blocking; run async work outside callback.
+        setTimeout(() => {
+          hydrateUserFromSession().catch((err) => {
+            console.error("Auth state hydrate failed:", err);
+          });
+        }, 0);
       } else {
         setUser(null);
+        setUserProfile(null);
         setView("login");
+        localStorage.removeItem(USER_CACHE_KEY);
       }
     });
 
@@ -196,9 +225,38 @@ const App: React.FC = () => {
 
   const handleLogin = async (_email: string) => {
     try {
-      await hydrateUserFromSession();
+      const sessionUser = await getAuthUserFromSession();
+      if (sessionUser) {
+        setUser((prev) => ({
+          email: sessionUser.email ?? prev?.email ?? "",
+          firstName: prev?.firstName ?? "",
+          lastName: prev?.lastName ?? "",
+          location: prev?.location ?? "",
+          skillLevel: prev?.skillLevel ?? "Novice",
+          leagues: prev?.leagues ?? [],
+        }));
+        setView("dashboard");
+      }
+
+      
+      // Do not block UI transition on profile hydration.
+      void hydrateUserFromSession();
     } catch (err) {
       console.error("Login hydrate failed:", err);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser((prev) => ({
+          email: session.user.email ?? prev?.email ?? "",
+          firstName: prev?.firstName ?? "",
+          lastName: prev?.lastName ?? "",
+          location: prev?.location ?? "",
+          skillLevel: prev?.skillLevel ?? "Novice",
+          leagues: prev?.leagues ?? [],
+        }));
+        setView("dashboard");
+      }
     }
   };
 
@@ -229,8 +287,15 @@ const App: React.FC = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setUserProfile(null);
     setView("login");
+    localStorage.removeItem(USER_CACHE_KEY);
   };
+
+  useEffect(() => {
+    if (!user) return;
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -286,6 +351,7 @@ const App: React.FC = () => {
           <Dashboard
             currentView={view}
             user={user!}
+            userProfile={userProfile}
             onNavigate={(v) => setView(v)}
             onLogout={handleLogout}
           />
@@ -308,9 +374,19 @@ const App: React.FC = () => {
           />
         );
       default:
-        return <Login onLogin={handleLogin} onSwitchToSignup={() => setView("signup")} />;
+        return (
+          <Login
+            onLogin={handleLogin}
+            onSwitchToSignup={() => setView("signup")}
+            onForgotPassword={() => setView("reset-password")}
+          />
+        );
     }
   };
+
+  console.log("Dashboard userProfile", userProfile);
+console.log("Dashboard user", user);
+
 
   return (
     <div className="h-[100dvh] w-full flex flex-col items-center bg-off-white dark:bg-dark-bg overflow-hidden transition-colors">

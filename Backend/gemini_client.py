@@ -95,7 +95,10 @@ async def _post_gemini(model: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             await asyncio.sleep((0.4 * attempt) + random.uniform(0.0, 0.2))
             continue
 
-        raise GeminiError(f"Gemini API error ({r.status_code}).")
+        detail = r.text.strip()
+        if len(detail) > 600:
+            detail = detail[:600] + "…"
+        raise GeminiError(f"Gemini API error ({r.status_code}): {detail}")
 
     raise GeminiError("Gemini request failed after retries.")
 

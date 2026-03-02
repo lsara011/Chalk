@@ -1,9 +1,10 @@
 import React from "react";
 import Logo from "../Logo";
-import { User, AppView } from "../../types";
+import { User, AppView, UserProfile } from "../../types";
 
 interface DashboardProps {
   user: User;
+  userProfile: UserProfile | null;
   onNavigate: (view: AppView) => void;
   onLogout: () => void;
   currentView: AppView;
@@ -11,16 +12,18 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({
   user,
+  userProfile,
   onNavigate,
   onLogout,
   currentView,
 }) => {
   const renderContent = () => {
+    const firstName = userProfile?.firstName || user.firstName;
     return (
       <div className="animate-fade-in overflow-hidden">
         <div className="mb-6 animate-slide-down">
           <h2 className="text-xl font-bold text-deep-charcoal dark:text-white">
-            Hi, {user.firstName}! 👋
+            Hi, {firstName}!
           </h2>
           <p className="text-xs text-muted-tt dark:text-dark-text-muted">
             Ready for today's session?

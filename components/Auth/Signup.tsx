@@ -95,6 +95,7 @@ const Signup: React.FC<SignupProps> = ({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [completeLoading, setCompleteLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
   // Location States
@@ -412,12 +413,16 @@ const Signup: React.FC<SignupProps> = ({
   };
 
   const handleComplete = async () => {
+    if (completeLoading) return;
     setAuthError("");
 
     // 0) Hard gate: validate everything before any network call
     const ok = validateAllBeforePersist();
     if (!ok) return;
 
+    setCompleteLoading(true);
+
+    try {
     // 1) Create auth user (or sign in if already exists)
     const authResult = await signUpWithSupabase();
     if (!authResult) return;
@@ -493,6 +498,9 @@ const Signup: React.FC<SignupProps> = ({
       location: fullLocation,
       leagues,
     });
+    } finally {
+      setCompleteLoading(false);
+    }
   };
 
   const renderAPASelector = (field: LeagueField) => {
@@ -882,9 +890,21 @@ const Signup: React.FC<SignupProps> = ({
                   onClick={
                     selectedLeagues.length > 0 ? handleNext : handleComplete
                   }
-                  className="flex-[2] btn-primary !py-3 active:scale-95 transition-all shadow-chalk-blue/20"
+                  disabled={completeLoading}
+                  className={`flex-[2] btn-primary !py-3 active:scale-95 transition-all shadow-chalk-blue/20 ${
+                    completeLoading ? "opacity-70 cursor-not-allowed" : ""
+                  }`}
                 >
-                  {selectedLeagues.length > 0 ? "Next" : "Create Account"}
+                  {completeLoading ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin"></span>
+                      Saving...
+                    </span>
+                  ) : selectedLeagues.length > 0 ? (
+                    "Next"
+                  ) : (
+                    "Create Account"
+                  )}
                 </button>
               </div>
             </div>
@@ -981,9 +1001,19 @@ const Signup: React.FC<SignupProps> = ({
               <button
                 type="button"
                 onClick={handleComplete}
-                className="flex-[2] btn-primary !py-3 active:scale-95 transition-all shadow-chalk-blue/20"
+                disabled={completeLoading}
+                className={`flex-[2] btn-primary !py-3 active:scale-95 transition-all shadow-chalk-blue/20 ${
+                  completeLoading ? "opacity-70 cursor-not-allowed" : ""
+                }`}
               >
-                Complete Profile
+                {completeLoading ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white/70 border-t-white rounded-full animate-spin"></span>
+                    Saving...
+                  </span>
+                ) : (
+                  "Complete Profile"
+                )}
               </button>
             </div>
             {emailExists && (

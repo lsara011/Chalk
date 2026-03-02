@@ -1,5 +1,5 @@
 
-export type AppView = 'login' | 'signup' | 'dashboard' | 'ai-coach' | 'speed-session' | 'form-analysis' | 'settings' | 'progress' | 'profile';
+export type AppView = 'login' | 'signup' | 'reset-password' | 'dashboard' | 'ai-coach' | 'speed-session' | 'form-analysis' | 'settings' | 'progress' | 'profile';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
 
@@ -17,6 +17,11 @@ export interface User {
   location?: string;
   leagues?: LeagueInfo[];
   skillLevel?: string;
+}
+
+export interface UserProfile {
+  firstName: string;
+  lastName: string;
 }
 
 export interface PracticeRoutine {

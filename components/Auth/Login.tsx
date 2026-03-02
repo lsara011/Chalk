@@ -1,9 +1,10 @@
 import React, { useState } from "react";
+import type { AuthError } from "@supabase/supabase-js";
 import Logo from "../Logo";
 import { supabase } from "@/services/supabase";
 
 interface LoginProps {
-  onLogin: (email: string) => void;
+  onLogin: (email: string) => void | Promise<void>;
   onSwitchToSignup: () => void;
   onForgotPassword: () => void;
 }
@@ -15,12 +16,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
 
+  const formatAuthError = (error: AuthError) => {
+    const code = error.code ? `[${error.code}] ` : "";
+    const message = error.message || "Authentication failed.";
+    return `${code}${message}`;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError("");
 
     const cleanEmail = email.trim();
-    const cleanPassword = password; // don't trim passwords
+    const cleanPassword = password; // do not trim passwords
 
     if (!cleanEmail || !cleanPassword) {
       setAuthError("Please enter your email and password.");
@@ -30,25 +37,26 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
     setAuthLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
 
       if (error) {
-        // common messages you’ll see: "Invalid login credentials"
-        const msg = error.message.toLowerCase().includes("invalid login")
-          ? "Incorrect email or password."
-          : error.message;
-
-        setAuthError(msg);
+        console.error("Supabase signInWithPassword error:", {
+          code: error.code,
+          status: error.status,
+          name: error.name,
+          message: error.message,
+        });
+        setAuthError(formatAuthError(error));
         return;
       }
 
-      onLogin(cleanEmail);
+      await onLogin(cleanEmail);
     } catch (err) {
-      console.error(err);
-      setAuthError("Login failed. Please try again.");
+      console.error("Unexpected login error:", err);
+      setAuthError("Login failed due to an unexpected error.");
     } finally {
       setAuthLoading(false);
     }
@@ -56,26 +64,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
 
   return (
     <main className="w-full px-8 py-6 flex flex-col h-full bg-white dark:bg-dark-bg animate-fade-in">
-      {/* ✅ Center */}
       <div className="flex-1 w-full flex flex-col justify-center items-center">
         <div className="mt-4 mb-6 flex flex-col items-center animate-slide-down">
           <div className="relative mb-1 hover:rotate-6 transition-transform">
             <Logo size="sm" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-deep-charcoal dark:text-white">
-            Chalk
-          </h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-deep-charcoal dark:text-white">Chalk</h1>
         </div>
         <div className="w-full max-w-sm text-center mb-4 animate-slide-up stagger-item-1">
-          <h2 className="text-xl font-bold text-deep-charcoal dark:text-white mb-1">
-            Ready to break?
-          </h2>
+          <h2 className="text-xl font-bold text-deep-charcoal dark:text-white mb-1">Ready to break?</h2>
         </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="w-full max-w-sm space-y-3 animate-slide-up stagger-item-2"
-        >
+        <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-3 animate-slide-up stagger-item-2">
           <input
             className="input-field !py-3 !px-4"
             placeholder="Email address"
@@ -123,10 +123,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
           >
             {authLoading ? "Signing in..." : "Sign In"}
           </button>
+
           {authError && (
-            <p className="text-[10px] text-red-500 font-bold mt-2 px-1 animate-slide-down">
-              {authError}
-            </p>
+            <p className="text-[10px] text-red-500 font-bold mt-2 px-1 animate-slide-down">{authError}</p>
           )}
 
           <div className="w-full mt-auto mb-4 animate-slide-up stagger-item-3">

@@ -58,7 +58,6 @@ const AVAILABLE_LEAGUES: LeagueDefinition[] = [
 
 const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser, themeMode, onThemeChange, onBack, onLogout }) => {
 
-
   const [isInternational, setIsInternational] = useState(false);
   const [countries, setCountries] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState('United States');
