@@ -2,6 +2,7 @@ import asyncio
 import random
 import httpx
 from typing import Any, Dict
+from urllib.parse import quote_plus
 from .settings import settings
 
 class GeminiError(RuntimeError):
@@ -151,3 +152,41 @@ async def generate_practice_routine(focus_area: str) -> str:
     if not text:
         raise GeminiError("Empty response from Gemini.")
     return text
+
+async def find_youtube_video(query: str) -> Dict[str, str] | None:
+    """
+    Resolve a search query to a single YouTube video.
+    Returns None when YouTube API is not configured or no result is found.
+    """
+    if not settings.YOUTUBE_API_KEY:
+        return None
+
+    url = (
+        "https://www.googleapis.com/youtube/v3/search"
+        f"?part=snippet&maxResults=1&type=video&q={quote_plus(query)}&key={settings.YOUTUBE_API_KEY}"
+    )
+    client = _get_client()
+
+    try:
+        r = await client.get(url)
+    except httpx.HTTPError:
+        return None
+
+    if r.status_code != 200:
+        return None
+
+    data = r.json()
+    items = data.get("items", [])
+    if not items:
+        return None
+
+    first = items[0]
+    video_id = first.get("id", {}).get("videoId")
+    if not video_id:
+        return None
+
+    return {
+        "youtubeVideoId": video_id,
+        "youtubeUrl": f"https://www.youtube.com/watch?v={video_id}",
+        "youtubeEmbedUrl": f"https://www.youtube.com/embed/{video_id}",
+    }

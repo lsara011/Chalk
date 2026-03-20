@@ -2,6 +2,7 @@ import base64
 import ast
 import json
 import re
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
@@ -16,6 +17,7 @@ from .models import (
 from .gemini_client import (
     analyze_form_video,
     generate_practice_routine,
+    find_youtube_video,
     close_gemini_client,
     GeminiError,
 )
@@ -150,7 +152,16 @@ async def generate_routine(req: GenerateRoutineRequest):
             raw_json_text = await generate_practice_routine(req.focusArea)
             try:
                 parsed = _parse_gemini_json(raw_json_text)
-                return PracticeRoutine.model_validate(parsed)
+                routine = PracticeRoutine.model_validate(parsed)
+                lookups = await asyncio.gather(
+                    *[find_youtube_video(d.youtubeSearchQuery) for d in routine.drills]
+                )
+                for drill, yt in zip(routine.drills, lookups):
+                    if yt:
+                        drill.youtubeVideoId = yt["youtubeVideoId"]
+                        drill.youtubeUrl = yt["youtubeUrl"]
+                        drill.youtubeEmbedUrl = yt["youtubeEmbedUrl"]
+                return routine
             except HTTPException as e:
                 last_parse_error = e
                 continue

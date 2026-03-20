@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { PracticeRoutine, Drill } from '../../types';
+import React, { useState } from 'react';
+import { PracticeRoutine } from '../../types';
 import { generateRoutine } from '@/services/geminiService';
 import MarkdownText from '../MarkdownText';
 
@@ -13,14 +13,12 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(false);
   const [routine, setRoutine] = useState<PracticeRoutine | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [drillImages, setDrillImages] = useState<Record<number, string>>({});
 
   const handleGenerate = async () => {
     if (!focusArea) return;
     setLoading(true);
     setError(null);
     setRoutine(null);
-    setDrillImages({});
     
     try {
       const result = await generateRoutine(focusArea);
@@ -54,7 +52,7 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
                 <span className="material-symbols-outlined text-2xl">auto_awesome</span>
               </div>
               <h2 className="text-xl font-bold mb-1 tracking-tight text-deep-charcoal dark:text-white">What's your focus?</h2>
-              <p className="text-xs text-muted-text dark:text-dark-text-muted mb-6 leading-relaxed">Gemini will build a custom routine with visual diagrams for your specific training needs.</p>
+              <p className="text-xs text-muted-text dark:text-dark-text-muted mb-6 leading-relaxed">Gemini will build a custom routine and suggest YouTube videos for your specific training needs.</p>
               
               <div className="space-y-3">
                 <input 
@@ -121,16 +119,26 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
               {routine.drills.map((drill, idx) => (
                 <div key={idx} className={`bg-white dark:bg-dark-surface rounded-[2.5rem] border border-soft-gray dark:border-dark-border shadow-sm overflow-hidden group animate-slide-up stagger-item-${idx+1}`}>
                   <div className="aspect-[16/9] w-full bg-gray-100 dark:bg-dark-bg relative">
-                    {drillImages[idx] ? (
-                      <img 
-                        src={drillImages[idx]} 
-                        alt={drill.name} 
-                        className="w-full h-full object-cover animate-fade-in duration-700"
+                    {drill.youtubeEmbedUrl ? (
+                      <iframe
+                        title={`${drill.name} YouTube video`}
+                        src={drill.youtubeEmbedUrl}
+                        className="w-full h-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-2">
-                        <div className="w-8 h-8 border-3 border-chalk-blue/20 border-t-chalk-blue rounded-full animate-spin"></div>
-                        <p className="text-[9px] font-bold text-muted-text dark:text-dark-text-muted uppercase tracking-wider">Visualizing...</p>
+                        <span className="material-symbols-outlined text-2xl text-muted-text dark:text-dark-text-muted">smart_display</span>
+                        <a
+                          href={`https://www.youtube.com/results?search_query=${encodeURIComponent(drill.youtubeSearchQuery)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[10px] font-bold text-chalk-blue-dark hover:underline uppercase tracking-wider"
+                        >
+                          Open YouTube Search
+                        </a>
                       </div>
                     )}
                     <div className="absolute top-4 left-4 w-9 h-9 rounded-2xl bg-white/90 dark:bg-black/90 backdrop-blur flex items-center justify-center text-xs font-black border border-white dark:border-white/10 shadow-lg group-hover:scale-110 transition-transform">
@@ -147,6 +155,16 @@ const AICoach: React.FC<AICoachProps> = ({ onBack }) => {
                     </div>
                     <div className="text-xs leading-relaxed text-muted-text dark:text-dark-text-muted">
                        <MarkdownText content={drill.instructions} />
+                    </div>
+                    <div className="mt-3 text-[11px]">
+                      <a
+                        href={drill.youtubeUrl ?? `https://www.youtube.com/results?search_query=${encodeURIComponent(drill.youtubeSearchQuery)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-bold text-chalk-blue-dark hover:underline"
+                      >
+                        Watch on YouTube
+                      </a>
                     </div>
                   </div>
                 </div>

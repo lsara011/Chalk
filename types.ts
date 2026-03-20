@@ -34,7 +34,10 @@ export interface Drill {
   name: string;
   reps: string;
   instructions: string;
-  imageUrl?: string;
+  youtubeSearchQuery: string;
+  youtubeVideoId?: string;
+  youtubeUrl?: string;
+  youtubeEmbedUrl?: string;
 }
 
 interface LoginProps {

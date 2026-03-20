@@ -8,6 +8,9 @@ class Drill(BaseModel):
     reps: str
     instructions: str
     youtubeSearchQuery: str
+    youtubeVideoId: str | None = None
+    youtubeUrl: str | None = None
+    youtubeEmbedUrl: str | None = None
 
 class PracticeRoutine(BaseModel):
     title: str

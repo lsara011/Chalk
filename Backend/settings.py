@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     GEMINI_MODEL_TEXT: str = "gemini-2.5-flash"
     GEMINI_MODEL_VIDEO: str = "gemini-2.5-flash"
+    YOUTUBE_API_KEY: str = ""
 
     @property
     def cors_allow_origins(self) -> List[str]:

@@ -1,7 +1,15 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { AuthError } from "@supabase/supabase-js";
 import Logo from "../Logo";
 import { supabase } from "@/services/supabase";
+
+const PENDING_SIGNUP_STORE_ID = "chalk-pending-signup-v1";
+
+interface PendingSignupData {
+  email: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
 
 interface LoginProps {
   onLogin: (email: string) => void | Promise<void>;
@@ -15,11 +23,53 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
   const [showPassword, setShowPassword] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (message: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage("");
+      toastTimerRef.current = null;
+    }, 4500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   const formatAuthError = (error: AuthError) => {
-    const code = error.code ? `[${error.code}] ` : "";
     const message = error.message || "Authentication failed.";
+    const lower = message.toLowerCase();
+    if (lower.includes("email not confirmed") || lower.includes("email not verified")) {
+      showToast("Verify your email before signing in.");
+      return "Please verify your email first, then sign in.";
+    }
+    const code = error.code ? `[${error.code}] ` : "";
     return `${code}${message}`;
+  };
+
+  const completePendingSignupIfAny = async (cleanEmail: string) => {
+    const raw = localStorage.getItem(PENDING_SIGNUP_STORE_ID);
+    if (!raw) return;
+
+    try {
+      const pending = JSON.parse(raw) as PendingSignupData;
+      if (!pending?.email || !pending?.payload) return;
+      if (pending.email !== cleanEmail.toLowerCase()) return;
+
+      const { error } = await supabase.rpc("complete_signup", pending.payload);
+      if (!error) {
+        localStorage.removeItem(PENDING_SIGNUP_STORE_ID);
+      } else {
+        console.error("Pending signup completion failed:", error);
+      }
+    } catch (err) {
+      console.error("Pending signup parse failed:", err);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -53,6 +103,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
         return;
       }
 
+      await completePendingSignupIfAny(cleanEmail);
       await onLogin(cleanEmail);
     } catch (err) {
       console.error("Unexpected login error:", err);
@@ -64,6 +115,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, onSwitchToSignup, onForgotPasswo
 
   return (
     <main className="w-full px-8 py-6 flex flex-col h-full bg-white dark:bg-dark-bg animate-fade-in">
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-deep-charcoal text-white text-xs font-semibold shadow-lg animate-slide-down">
+          {toastMessage}
+        </div>
+      )}
       <div className="flex-1 w-full flex flex-col justify-center items-center">
         <div className="mt-4 mb-6 flex flex-col items-center animate-slide-down">
           <div className="relative mb-1 hover:rotate-6 transition-transform">

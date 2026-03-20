@@ -3,6 +3,8 @@ import Logo from "../Logo";
 import { LeagueInfo } from "../../types";
 import { supabase } from "../../services/supabase";
 
+const PENDING_SIGNUP_STORE_ID = "chalk-pending-signup-v1";
+
 interface LeagueField {
   id: string;
   label: string;
@@ -84,6 +86,27 @@ interface SignupProps {
   onSwitchToLogin: () => void;
 }
 
+interface CompleteSignupPayload {
+  p_first_name: string;
+  p_last_name: string;
+  p_country: string;
+  p_state: string;
+  p_city: string;
+  p_is_international: boolean;
+  p_apa_8ball_sl: number | null;
+  p_apa_9ball_sl: number | null;
+  p_fargo: number | null;
+  p_usapl: number | null;
+  p_vnea: number | null;
+  p_tap: number | null;
+}
+
+interface PendingSignupData {
+  email: string;
+  payload: CompleteSignupPayload;
+  createdAt: string;
+}
+
 const Signup: React.FC<SignupProps> = ({
   onSignupComplete,
   onSwitchToLogin,
@@ -97,6 +120,10 @@ const Signup: React.FC<SignupProps> = ({
   const [authLoading, setAuthLoading] = useState(false);
   const [completeLoading, setCompleteLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [awaitingEmailVerification, setAwaitingEmailVerification] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
 
   // Location States
   const [isInternational, setIsInternational] = useState(false);
@@ -131,6 +158,12 @@ const Signup: React.FC<SignupProps> = ({
     };
     fetchCountries();
   }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const t = setTimeout(() => setToastMessage(""), 4500);
+    return () => clearTimeout(t);
+  }, [toastMessage]);
 
   useEffect(() => {
     const fetchStates = async () => {
@@ -307,6 +340,53 @@ const Signup: React.FC<SignupProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
+  const buildCompleteSignupPayload = (): CompleteSignupPayload => ({
+    p_first_name: firstName.trim(),
+    p_last_name: lastName.trim(),
+    p_country: isInternational ? selectedCountry : "United States",
+    p_state: selectedState,
+    p_city: selectedCity,
+    p_is_international: isInternational,
+    p_apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
+    p_apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
+    p_fargo: leagueRatings.bca_fargo ? Number(leagueRatings.bca_fargo) : null,
+    p_usapl: leagueRatings.usapl_fargo ? Number(leagueRatings.usapl_fargo) : null,
+    p_vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
+    p_tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
+  });
+
+  const savePendingSignup = (cleanEmail: string, payload: CompleteSignupPayload) => {
+    const pending: PendingSignupData = {
+      email: cleanEmail.toLowerCase(),
+      payload,
+      createdAt: new Date().toISOString(),
+    };
+    localStorage.setItem(PENDING_SIGNUP_STORE_ID, JSON.stringify(pending));
+  };
+
+  const resendVerificationEmail = async () => {
+    setResendLoading(true);
+    setResendMessage("");
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) {
+        setResendMessage("Could not resend verification email right now.");
+        setToastMessage("Could not resend verification email right now.");
+      } else {
+        setResendMessage("Verification email sent. Check your inbox/spam folder.");
+        setToastMessage("Verification email sent.");
+      }
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const signUpWithSupabase = async () => {
     setAuthError("");
     setAuthLoading(true);
@@ -341,6 +421,7 @@ const Signup: React.FC<SignupProps> = ({
           email: cleanEmail,
           password: cleanPassword,
           options: {
+            emailRedirectTo: `${window.location.origin}/`,
             data: {
               first_name: cleanFirst,
               last_name: cleanLast,
@@ -415,57 +496,55 @@ const Signup: React.FC<SignupProps> = ({
   const handleComplete = async () => {
     if (completeLoading) return;
     setAuthError("");
+    setResendMessage("");
 
     // 0) Hard gate: validate everything before any network call
     const ok = validateAllBeforePersist();
     if (!ok) return;
 
+    const cleanEmail = email.trim().toLowerCase();
+    const completionPayload = buildCompleteSignupPayload();
+
     setCompleteLoading(true);
 
     try {
-    // 1) Create auth user (or sign in if already exists)
-    const authResult = await signUpWithSupabase();
-    if (!authResult) return;
+      // 1) Create auth user (or sign in if already exists)
+      const authResult = await signUpWithSupabase();
+      if (!authResult) return;
 
-    // 2) Confirm session user is available
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser();
+      // If email confirmation is enabled, Supabase returns no session here.
+      if (!authResult.session) {
+        savePendingSignup(cleanEmail, completionPayload);
+        setAwaitingEmailVerification(true);
+        setToastMessage("Account created. Verify your email before signing in.");
+        return;
+      }
 
-    if (userErr || !user) {
-      console.error(userErr);
-      setAuthError("Could not start a session. Please log in and try again.");
-      return;
-    }
+      // 2) Confirm session user is available
+      const {
+        data: { user },
+        error: userErr,
+      } = await supabase.auth.getUser();
 
-    // 3) Only now: write to DB (your choice)
-    // If you kept RPC:
-    const { error: rpcErr } = await supabase.rpc("complete_signup", {
-      p_first_name: firstName.trim(),
-      p_last_name: lastName.trim(),
-      p_country: isInternational ? selectedCountry : "United States",
-      p_state: selectedState,
-      p_city: selectedCity,
-      p_is_international: isInternational,
-      p_apa_8ball_sl: leagueRatings.apa8 ? Number(leagueRatings.apa8) : null,
-      p_apa_9ball_sl: leagueRatings.apa9 ? Number(leagueRatings.apa9) : null,
-      p_fargo: leagueRatings.bca_fargo ? Number(leagueRatings.bca_fargo) : null,
-      p_usapl: leagueRatings.usapl_fargo
-        ? Number(leagueRatings.usapl_fargo)
-        : null,
-      p_vnea: leagueRatings.vnea_sl ? Number(leagueRatings.vnea_sl) : null,
-      p_tap: leagueRatings.tap_sl ? Number(leagueRatings.tap_sl) : null,
-    });
+      if (userErr || !user) {
+        console.error(userErr);
+        setAuthError("Could not start a session. Please log in and try again.");
+        return;
+      }
 
-    if (rpcErr) {
-      console.error(rpcErr);
-      setAuthError("Could not save your profile. Please try again.");
-      return;
-    }
+      // 3) Only now: write profile data
+      const { error: rpcErr } = await supabase.rpc("complete_signup", completionPayload);
 
-    // 4) Only after DB succeeds: build payload and finish
-    const leagues: LeagueInfo[] = selectedLeagues.map((id) => {
+      if (rpcErr) {
+        console.error(rpcErr);
+        setAuthError("Could not save your profile. Please try again.");
+        return;
+      }
+
+      localStorage.removeItem(PENDING_SIGNUP_STORE_ID);
+
+      // 4) Only after DB succeeds: build payload and finish
+      const leagues: LeagueInfo[] = selectedLeagues.map((id) => {
       const def = AVAILABLE_LEAGUES.find((l) => l.id === id)!;
 
       const ratingString = def.fields
@@ -492,12 +571,12 @@ const Signup: React.FC<SignupProps> = ({
 
     const fullName = `${firstName} ${lastName}`.trim();
 
-    onSignupComplete({
-      email: email.trim(),
-      name: fullName,
-      location: fullLocation,
-      leagues,
-    });
+      onSignupComplete({
+        email: email.trim(),
+        name: fullName,
+        location: fullLocation,
+        leagues,
+      });
     } finally {
       setCompleteLoading(false);
     }
@@ -554,6 +633,45 @@ const Signup: React.FC<SignupProps> = ({
   };
 
   const renderStep = () => {
+    if (awaitingEmailVerification) {
+      return (
+        <div className="w-full space-y-6 animate-fade-in text-center">
+          <div className="bg-white dark:bg-dark-surface border border-soft-gray dark:border-dark-border rounded-3xl p-6 shadow-sm">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-chalk-blue/20 text-chalk-blue-dark flex items-center justify-center">
+              <span className="material-symbols-outlined">mark_email_read</span>
+            </div>
+            <h2 className="text-xl font-bold text-deep-charcoal dark:text-white mb-2">Verify Your Email</h2>
+            <p className="text-sm text-muted-text dark:text-dark-text-muted leading-relaxed">
+              We sent a verification link to <strong>{email.trim()}</strong>. Click it, then sign in to finish setup.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              type="button"
+              onClick={resendVerificationEmail}
+              disabled={resendLoading}
+              className="btn-secondary w-full !py-3 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {resendLoading ? "Sending..." : "Resend Verification Email"}
+            </button>
+            <button
+              type="button"
+              onClick={onSwitchToLogin}
+              className="btn-primary w-full !py-3"
+            >
+              Back To Login
+            </button>
+            {resendMessage && (
+              <p className="text-[11px] font-semibold text-muted-text dark:text-dark-text-muted">
+                {resendMessage}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     switch (step) {
       case 1:
         return (
@@ -1040,6 +1158,11 @@ const Signup: React.FC<SignupProps> = ({
 
   return (
     <main className="w-full px-8 py-6 flex flex-col items-center h-full overflow-hidden bg-white dark:bg-dark-bg transition-all duration-500">
+      {toastMessage && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-deep-charcoal text-white text-xs font-semibold shadow-lg animate-slide-down">
+          {toastMessage}
+        </div>
+      )}
       <div className="mt-4 mb-8 flex flex-col items-center animate-slide-down">
         <div className="relative mb-4 hover:scale-110 transition-transform cursor-pointer">
           <Logo size="sm" />

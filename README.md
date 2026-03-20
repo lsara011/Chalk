@@ -10,6 +10,7 @@ Chalk is a mobile-first billiards training app with:
 ## Features
 
 - Email/password auth (Supabase)
+- Email verification on signup (Supabase confirm-email flow)
 - Persisted login across refresh
 - Idle session timeout auto-logout
 - AI form analysis from uploaded/recorded video
@@ -101,6 +102,7 @@ Optional:
 - `FRONTEND_ORIGINS` (comma-separated allowlist, e.g. `http://localhost:5173,http://127.0.0.1:5173`)
 - `GEMINI_MODEL_TEXT` (default: `gemini-2.5-flash`)
 - `GEMINI_MODEL_VIDEO` (default: `gemini-2.5-flash`)
+- `YOUTUBE_API_KEY` (optional; enables automatic YouTube video links/embeds for drills)
 
 ## Local Development
 
@@ -131,6 +133,13 @@ python -m uvicorn Backend.main:app --reload --port 8000
 ```
 
 Backend docs: `http://localhost:8000/docs`
+
+## Supabase Email Verification
+
+1. In Supabase Dashboard: `Authentication -> Providers -> Email`
+2. Enable **Confirm email**
+3. In `Authentication -> URL Configuration`, add your app URL (for local dev: `http://localhost:5173`)
+4. Signup now sends a verification email; after user verifies and logs in, pending profile setup is completed automatically.
 
 ## API Reference
 
@@ -187,19 +196,28 @@ Response:
       "name": "string",
       "reps": "string",
       "instructions": "string",
-      "youtubeSearchQuery": "string"
+      "youtubeSearchQuery": "string",
+      "youtubeVideoId": "string|null",
+      "youtubeUrl": "string|null",
+      "youtubeEmbedUrl": "string|null"
     },
     {
       "name": "string",
       "reps": "string",
       "instructions": "string",
-      "youtubeSearchQuery": "string"
+      "youtubeSearchQuery": "string",
+      "youtubeVideoId": "string|null",
+      "youtubeUrl": "string|null",
+      "youtubeEmbedUrl": "string|null"
     },
     {
       "name": "string",
       "reps": "string",
       "instructions": "string",
-      "youtubeSearchQuery": "string"
+      "youtubeSearchQuery": "string",
+      "youtubeVideoId": "string|null",
+      "youtubeUrl": "string|null",
+      "youtubeEmbedUrl": "string|null"
     }
   ]
 }
@@ -208,6 +226,8 @@ Response:
 Notes:
 
 - Backend validates exactly 3 drills via Pydantic
+- If `YOUTUBE_API_KEY` is set, backend enriches drills with a concrete YouTube video URL/embed URL
+- Without `YOUTUBE_API_KEY`, frontend falls back to YouTube search links using `youtubeSearchQuery`
 
 ## Project Scripts
 
