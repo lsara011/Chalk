@@ -97,7 +97,13 @@ async def _post_gemini(model: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 
         detail = r.text.strip()
         if len(detail) > 600:
-            detail = detail[:600] + "…"
+            detail = detail[:600] + "..."
+        if r.status_code == 404:
+            raise GeminiError(
+                "Gemini API error (404): configured model is unavailable. "
+                "Update GEMINI_MODEL_TEXT/GEMINI_MODEL_VIDEO to a current Gemini model. "
+                f"Provider detail: {detail}"
+            )
         raise GeminiError(f"Gemini API error ({r.status_code}): {detail}")
 
     raise GeminiError("Gemini request failed after retries.")
@@ -136,7 +142,7 @@ async def generate_practice_routine(focus_area: str) -> str:
         "generationConfig": {
             "response_mime_type": "application/json",
             "temperature": 0.4,
-            "max_output_tokens": 700,
+            "max_output_tokens": 1200,
         }
     }
 

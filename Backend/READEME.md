@@ -16,6 +16,9 @@ From `/Backend`:
 Create `Backend/.env`:
 `GEMINI_API_KEY=...`
 `FRONTEND_ORIGIN=http://localhost:5173`
+`FRONTEND_ORIGINS=http://localhost:5173,http://127.0.0.1:5173`
+`GEMINI_MODEL_TEXT=gemini-2.5-flash`
+`GEMINI_MODEL_VIDEO=gemini-2.5-flash`
 
 ## 4) Run
 From project root:
@@ -24,3 +27,8 @@ From project root:
 ## 5) Test
 Open:
 `http://localhost:8000/docs`
+
+Quick API check from PowerShell:
+`Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/generate-routine" -ContentType "application/json" -Body '{"focusArea":"draw shots"}'`
+
+If Gemini returns 404, your configured model is unavailable. Set `GEMINI_MODEL_TEXT` / `GEMINI_MODEL_VIDEO` to a current model (for example `gemini-2.5-flash`).

@@ -98,8 +98,9 @@ Required:
 Optional:
 
 - `FRONTEND_ORIGIN` (default: `http://localhost:5173`)
-- `GEMINI_MODEL_TEXT` (default: `gemini-2.0-flash`)
-- `GEMINI_MODEL_VIDEO` (default: `gemini-2.0-flash`)
+- `FRONTEND_ORIGINS` (comma-separated allowlist, e.g. `http://localhost:5173,http://127.0.0.1:5173`)
+- `GEMINI_MODEL_TEXT` (default: `gemini-2.5-flash`)
+- `GEMINI_MODEL_VIDEO` (default: `gemini-2.5-flash`)
 
 ## Local Development
 
@@ -229,7 +230,7 @@ From root:
   - Ensure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` exist in root `.env`
 
 - CORS errors calling backend
-  - Set backend `FRONTEND_ORIGIN` to exact frontend origin
+  - Set backend `FRONTEND_ORIGINS` to comma-separated frontend origins, or `FRONTEND_ORIGIN` for a single origin
 
 - Login works but dashboard does not hydrate
   - Verify Supabase tables/rows exist for the authenticated user:
@@ -239,4 +240,7 @@ From root:
 
 - Gemini call failures (`502`)
   - Check backend `.env` has valid `GEMINI_API_KEY`
+  - Check `GEMINI_MODEL_TEXT` and `GEMINI_MODEL_VIDEO` use a current Gemini model (deprecated models can return `404`)
   - Check backend logs for provider/network errors
+  - Quick check:
+    - `Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/generate-routine" -ContentType "application/json" -Body '{"focusArea":"draw shots"}'`
